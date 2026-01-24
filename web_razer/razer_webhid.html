@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Razer Mouse WebHID Driver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 {
+            text-align: center;
+            color: #00ff00;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #00ff00;
+        }
+        .card {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(0, 255, 0, 0.2);
+        }
+        .card h2 {
+            color: #00ff00;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+            border-bottom: 1px solid rgba(0, 255, 0, 0.3);
+            padding-bottom: 10px;
+        }
+        .status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            transition: background 0.3s;
+        }
+        .status-dot.connected {
+            background: #00ff00;
+            box-shadow: 0 0 10px #00ff00;
+        }
+        button {
+            background: linear-gradient(135deg, #00ff00 0%, #00aa00 100%);
+            border: none;
+            color: #000;
+            padding: 12px 25px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1em;
+            transition: all 0.3s;
+        }
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(0, 255, 0, 0.4);
+        }
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        .control-group {
+            margin-bottom: 20px;
+        }
+        .control-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #aaa;
+        }
+        .radio-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .radio-btn {
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(0, 255, 0, 0.3);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .radio-btn:hover {
+            border-color: #00ff00;
+        }
+        .radio-btn.active {
+            background: rgba(0, 255, 0, 0.2);
+            border-color: #00ff00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+        .radio-btn input {
+            display: none;
+        }
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .slider {
+            flex: 1;
+            -webkit-appearance: none;
+            height: 8px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.2);
+            outline: none;
+        }
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #00ff00;
+            cursor: pointer;
+            box-shadow: 0 0 10px #00ff00;
+        }
+        .slider-value {
+            min-width: 80px;
+            text-align: right;
+            font-family: monospace;
+            font-size: 1.2em;
+            color: #00ff00;
+        }
+        .dpi-inputs {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .dpi-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .dpi-input-group input {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(0, 255, 0, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            color: #fff;
+            font-size: 1.1em;
+            text-align: center;
+        }
+        .dpi-input-group input:focus {
+            outline: none;
+            border-color: #00ff00;
+            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .checkbox-group input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            accent-color: #00ff00;
+        }
+        .offset-control {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .offset-value {
+            font-size: 2em;
+            font-family: monospace;
+            color: #00ff00;
+            min-width: 60px;
+            text-align: center;
+        }
+        .offset-btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            font-size: 1.5em;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .log-container {
+            background: #000;
+            border-radius: 8px;
+            padding: 15px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 0.9em;
+        }
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .log-entry.send {
+            color: #00ff00;
+        }
+        .log-entry.receive {
+            color: #00aaff;
+        }
+        .log-entry.error {
+            color: #ff4444;
+        }
+        .log-entry.info {
+            color: #ffaa00;
+        }
+        .apply-btn {
+            width: 100%;
+            margin-top: 15px;
+            padding: 15px;
+            font-size: 1.1em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Razer Mouse WebHID Driver</h1>
+
+        <!-- Connection Card -->
+        <div class="card">
+            <h2>Device Connection</h2>
+            <div class="status">
+                <div class="status-dot" id="statusDot"></div>
+                <span id="statusText">Not connected</span>
+            </div>
+            <button id="connectBtn" onclick="connectDevice()">Connect Razer Mouse</button>
+            <button id="disconnectBtn" onclick="disconnectDevice()" disabled style="margin-left: 10px;">Disconnect</button>
+        </div>
+
+        <!-- Polling Rate Card -->
+        <div class="card">
+            <h2>Polling Rate</h2>
+            <div class="radio-group" id="pollingRateGroup">
+                <label class="radio-btn">
+                    <input type="radio" name="pollingRate" value="0x01">
+                    125 Hz
+                </label>
+                <label class="radio-btn">
+                    <input type="radio" name="pollingRate" value="0x02">
+                    250 Hz
+                </label>
+                <label class="radio-btn">
+                    <input type="radio" name="pollingRate" value="0x04">
+                    500 Hz
+                </label>
+                <label class="radio-btn active">
+                    <input type="radio" name="pollingRate" value="0x08" checked>
+                    1000 Hz
+                </label>
+                <label class="radio-btn">
+                    <input type="radio" name="pollingRate" value="0x10">
+                    2000 Hz
+                </label>
+                <label class="radio-btn">
+                    <input type="radio" name="pollingRate" value="0x20">
+                    4000 Hz
+                </label>
+                <label class="radio-btn">
+                    <input type="radio" name="pollingRate" value="0x40">
+                    8000 Hz
+                </label>
+            </div>
+            <button class="apply-btn" onclick="applyPollingRate()" disabled id="applyPollingBtn">Apply Polling Rate</button>
+        </div>
+
+        <!-- DPI Card -->
+        <div class="card">
+            <h2>DPI Settings</h2>
+            <div class="checkbox-group">
+                <input type="checkbox" id="separateDpi" onchange="toggleSeparateDpi()">
+                <label for="separateDpi">Separate X/Y DPI</label>
+            </div>
+            <div class="dpi-inputs">
+                <div class="dpi-input-group">
+                    <label>X DPI (100 - 30000)</label>
+                    <input type="number" id="dpiX" value="800" min="100" max="30000" step="50">
+                    <input type="range" class="slider" id="dpiXSlider" value="800" min="100" max="30000" step="50" oninput="syncDpiInput('X')">
+                </div>
+                <div class="dpi-input-group" id="dpiYGroup">
+                    <label>Y DPI (100 - 30000)</label>
+                    <input type="number" id="dpiY" value="800" min="100" max="30000" step="50">
+                    <input type="range" class="slider" id="dpiYSlider" value="800" min="100" max="30000" step="50" oninput="syncDpiInput('Y')">
+                </div>
+            </div>
+            <button class="apply-btn" onclick="applyDpi()" disabled id="applyDpiBtn">Apply DPI</button>
+        </div>
+
+        <!-- Grip Offset Card -->
+        <div class="card">
+            <h2>Grip Offset (Asymmetric Cutoff)</h2>
+            <div class="offset-control">
+                <button class="offset-btn" onclick="adjustOffset(-1)">-</button>
+                <div class="offset-value" id="offsetValue">0</div>
+                <button class="offset-btn" onclick="adjustOffset(1)">+</button>
+            </div>
+            <p style="color: #888; margin-top: 10px; font-size: 0.9em;">Range: -10 to +10</p>
+            <button class="apply-btn" onclick="applyOffset()" disabled id="applyOffsetBtn">Apply Grip Offset</button>
+        </div>
+
+        <!-- Log Card -->
+        <div class="card">
+            <h2>Communication Log</h2>
+            <div class="log-container" id="logContainer"></div>
+            <button style="margin-top: 10px;" onclick="clearLog()">Clear Log</button>
+        </div>
+    </div>
+
+    <script>
+        // Razer USB Vendor ID
+        const RAZER_VENDOR_ID = 0x1532;
+
+        // Known Razer mouse product IDs (add more as needed)
+        const RAZER_PRODUCTS = [
+            0x007A, // DeathAdder V2
+            0x007C, // DeathAdder V2 Pro
+            0x0084, // DeathAdder V2 X HyperSpeed
+            0x008C, // Basilisk V3
+            0x008E, // Basilisk V3 Pro
+            0x0090, // DeathAdder V3
+            0x0092, // DeathAdder V3 Pro
+            0x00A6, // Viper V3 Pro
+            0x00B6, // Viper V3 HyperSpeed
+            0x0078, // Basilisk Ultimate
+            0x0086, // Naga X
+        ];
+
+        let device = null;
+        let transactionId = 0;
+        let gripOffset = 0;
+        let separateDpiEnabled = false;
+
+        // Razer Protocol Constants
+        const RAZER_REPORT_LEN = 90;
+        const RAZER_CMD_STATUS_NEW = 0x00;
+        const RAZER_CMD_STATUS_BUSY = 0x01;
+        const RAZER_CMD_STATUS_SUCCESS = 0x02;
+        const RAZER_CMD_STATUS_FAILURE = 0x03;
+
+        // Command Classes
+        const CMD_CLASS_POLLING = 0x00;
+        const CMD_CLASS_DPI = 0x04;
+        const CMD_CLASS_DEVICE = 0x00;
+
+        // Command IDs
+        const CMD_POLLING_RATE = 0x05;
+        const CMD_DPI = 0x04;
+        const CMD_DPI_STAGES = 0x06;
+
+        function log(message, type = 'info') {
+            const container = document.getElementById('logContainer');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            const time = new Date().toLocaleTimeString();
+            entry.textContent = `[${time}] ${message}`;
+            container.appendChild(entry);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('logContainer').innerHTML = '';
+        }
+
+        function updateConnectionStatus(connected) {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const applyBtns = ['applyPollingBtn', 'applyDpiBtn', 'applyOffsetBtn'];
+
+            if (connected) {
+                dot.classList.add('connected');
+                text.textContent = `Connected: ${device.productName}`;
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                applyBtns.forEach(id => document.getElementById(id).disabled = false);
+            } else {
+                dot.classList.remove('connected');
+                text.textContent = 'Not connected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                applyBtns.forEach(id => document.getElementById(id).disabled = true);
+            }
+        }
+
+        async function connectDevice() {
+            try {
+                log('Requesting HID device...', 'info');
+
+                const devices = await navigator.hid.requestDevice({
+                    filters: [{ vendorId: RAZER_VENDOR_ID }]
+                });
+
+                if (devices.length === 0) {
+                    log('No device selected', 'error');
+                    return;
+                }
+
+                device = devices[0];
+                log(`Found device: ${device.productName} (PID: 0x${device.productId.toString(16).toUpperCase()})`, 'info');
+
+                if (!device.opened) {
+                    await device.open();
+                    log('Device opened successfully', 'info');
+                }
+
+                // Set up input report handler
+                device.addEventListener('inputreport', handleInputReport);
+
+                updateConnectionStatus(true);
+                log('Connected and ready!', 'info');
+
+            } catch (error) {
+                log(`Connection error: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        async function disconnectDevice() {
+            if (device) {
+                try {
+                    await device.close();
+                    device = null;
+                    updateConnectionStatus(false);
+                    log('Disconnected', 'info');
+                } catch (error) {
+                    log(`Disconnect error: ${error.message}`, 'error');
+                }
+            }
+        }
+
+        function handleInputReport(event) {
+            const { data, reportId } = event;
+            const bytes = new Uint8Array(data.buffer);
+            const hexStr = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join(' ');
+            log(`Received (Report ${reportId}): ${hexStr}`, 'receive');
+        }
+
+        function calculateCRC(data) {
+            // XOR bytes 2-87
+            let crc = 0;
+            for (let i = 2; i < 88; i++) {
+                crc ^= data[i];
+            }
+            return crc;
+        }
+
+        function createRazerCommand(commandClass, commandId, dataSize, args = []) {
+            const buffer = new Uint8Array(RAZER_REPORT_LEN);
+
+            // Header
+            buffer[0] = RAZER_CMD_STATUS_NEW;  // Status
+            buffer[1] = transactionId++ & 0xFF; // Transaction ID
+            buffer[2] = 0x00;  // Remaining packets
+            buffer[3] = 0x00;  // Protocol type
+            buffer[4] = 0x00;  // Reserved
+            buffer[5] = dataSize;  // Data size
+            buffer[6] = commandClass;  // Command class
+            buffer[7] = commandId;  // Command ID
+
+            // Arguments
+            for (let i = 0; i < args.length && i < 80; i++) {
+                buffer[8 + i] = args[i];
+            }
+
+            // Calculate CRC
+            buffer[88] = calculateCRC(buffer);
+            buffer[89] = 0x00;
+
+            return buffer;
+        }
+
+        async function sendCommand(buffer, reportId = 0x00) {
+            if (!device || !device.opened) {
+                log('Device not connected', 'error');
+                return false;
+            }
+
+            try {
+                const hexStr = Array.from(buffer).map(b => b.toString(16).padStart(2, '0')).join(' ');
+                log(`Sending: ${hexStr.substring(0, 60)}...`, 'send');
+
+                // Try sendFeatureReport first (most Razer mice use this)
+                await device.sendFeatureReport(reportId, buffer);
+
+                log('Command sent successfully', 'info');
+
+                // Small delay for device to process
+                await new Promise(resolve => setTimeout(resolve, 50));
+
+                return true;
+            } catch (error) {
+                log(`Send error: ${error.message}`, 'error');
+
+                // Fallback: try sendReport
+                try {
+                    await device.sendReport(reportId, buffer);
+                    log('Command sent via sendReport', 'info');
+                    return true;
+                } catch (e2) {
+                    log(`Fallback also failed: ${e2.message}`, 'error');
+                    return false;
+                }
+            }
+        }
+
+        // Polling Rate Control
+        function initPollingRateUI() {
+            const radioGroup = document.getElementById('pollingRateGroup');
+            radioGroup.querySelectorAll('.radio-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    radioGroup.querySelectorAll('.radio-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    btn.querySelector('input').checked = true;
+                });
+            });
+        }
+
+        async function applyPollingRate() {
+            const selected = document.querySelector('input[name="pollingRate"]:checked');
+            if (!selected) {
+                log('No polling rate selected', 'error');
+                return;
+            }
+
+            const rateValue = parseInt(selected.value);
+            const rateHz = {
+                0x01: 125,
+                0x02: 250,
+                0x04: 500,
+                0x08: 1000,
+                0x10: 2000,
+                0x20: 4000,
+                0x40: 8000
+            }[rateValue] || 'Unknown';
+
+            log(`Setting polling rate to ${rateHz} Hz...`, 'info');
+
+            // Command: Class 0x00, ID 0x05 for polling rate
+            // Based on pcap: 02 00 40 01 XX
+            const cmd = createRazerCommand(0x00, 0x05, 0x01, [rateValue]);
+            await sendCommand(cmd);
+        }
+
+        // DPI Control
+        function toggleSeparateDpi() {
+            separateDpiEnabled = document.getElementById('separateDpi').checked;
+            const dpiYGroup = document.getElementById('dpiYGroup');
+
+            if (separateDpiEnabled) {
+                dpiYGroup.style.opacity = '1';
+                dpiYGroup.style.pointerEvents = 'auto';
+            } else {
+                dpiYGroup.style.opacity = '0.5';
+                dpiYGroup.style.pointerEvents = 'none';
+                // Sync Y to X
+                document.getElementById('dpiY').value = document.getElementById('dpiX').value;
+                document.getElementById('dpiYSlider').value = document.getElementById('dpiX').value;
+            }
+        }
+
+        function syncDpiInput(axis) {
+            const slider = document.getElementById(`dpi${axis}Slider`);
+            const input = document.getElementById(`dpi${axis}`);
+            input.value = slider.value;
+
+            if (!separateDpiEnabled && axis === 'X') {
+                document.getElementById('dpiY').value = slider.value;
+                document.getElementById('dpiYSlider').value = slider.value;
+            }
+        }
+
+        // Sync input to slider
+        document.addEventListener('DOMContentLoaded', () => {
+            ['X', 'Y'].forEach(axis => {
+                const input = document.getElementById(`dpi${axis}`);
+                input.addEventListener('input', () => {
+                    document.getElementById(`dpi${axis}Slider`).value = input.value;
+                    if (!separateDpiEnabled && axis === 'X') {
+                        document.getElementById('dpiY').value = input.value;
+                        document.getElementById('dpiYSlider').value = input.value;
+                    }
+                });
+            });
+
+            initPollingRateUI();
+            toggleSeparateDpi();
+        });
+
+        async function applyDpi() {
+            const dpiX = parseInt(document.getElementById('dpiX').value);
+            let dpiY = separateDpiEnabled ?
+                parseInt(document.getElementById('dpiY').value) : dpiX;
+
+            if (dpiX < 100 || dpiX > 30000 || dpiY < 100 || dpiY > 30000) {
+                log('DPI must be between 100 and 30000', 'error');
+                return;
+            }
+
+            log(`Setting DPI to X:${dpiX} Y:${dpiY}...`, 'info');
+
+            // DPI Command based on pcap analysis:
+            // Command class: 0x04, Command ID: 0x05 or 0x06
+            // Args: [stage, ?, ?, x_hi, x_lo, y_hi, y_lo]
+            const args = [
+                0x01,  // DPI stage (1)
+                0x01,  // Enable X
+                0x01,  // Enable Y
+                (dpiX >> 8) & 0xFF,  // X DPI high byte
+                dpiX & 0xFF,          // X DPI low byte
+                (dpiY >> 8) & 0xFF,  // Y DPI high byte
+                dpiY & 0xFF           // Y DPI low byte
+            ];
+
+            const cmd = createRazerCommand(0x04, 0x05, 0x07, args);
+            await sendCommand(cmd);
+
+            // Send save command
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const saveCmd = createRazerCommand(0x04, 0x06, 0x01, [0x00]);
+            await sendCommand(saveCmd);
+        }
+
+        // Grip Offset Control
+        function adjustOffset(delta) {
+            gripOffset = Math.max(-10, Math.min(10, gripOffset + delta));
+            document.getElementById('offsetValue').textContent = gripOffset >= 0 ? `+${gripOffset}` : gripOffset;
+        }
+
+        async function applyOffset() {
+            log(`Setting grip offset to ${gripOffset}...`, 'info');
+
+            // Asymmetric cutoff command
+            // Based on pcap analysis: 0x04, 0x09 for asymmetric lift
+            // The value needs to be converted to the device format
+            const offsetValue = gripOffset + 10;  // Convert -10~+10 to 0~20
+
+            const args = [
+                0x01,  // Enable
+                offsetValue & 0xFF
+            ];
+
+            const cmd = createRazerCommand(0x04, 0x09, 0x02, args);
+            await sendCommand(cmd);
+        }
+
+        // Check WebHID support
+        if (!navigator.hid) {
+            log('WebHID is not supported in this browser. Use Chrome/Edge.', 'error');
+            document.getElementById('connectBtn').disabled = true;
+        }
+    </script>
+</body>
+</html>

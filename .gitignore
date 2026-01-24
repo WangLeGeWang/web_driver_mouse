@@ -1,0 +1,11 @@
+.idea
+
+.DS_Store
+
+node_modules
+
+.claude
+
+razermouse_driver.c
+
+CLAUDE.md

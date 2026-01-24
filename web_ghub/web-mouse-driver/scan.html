@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HID 完整扫描 - PRO X SUPERLIGHT</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Consolas', monospace;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 20px;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 { color: #00d4ff; margin-bottom: 10px; }
+    .warning {
+      background: #4a3000;
+      border: 1px solid #ffa502;
+      color: #ffa502;
+      padding: 15px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+    }
+    .panel {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .panel h2 { color: #00d4ff; font-size: 16px; margin-bottom: 10px; }
+    .btn {
+      background: #0f3460;
+      color: #fff;
+      border: 1px solid #00d4ff;
+      padding: 10px 20px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-bottom: 8px;
+      font-size: 14px;
+    }
+    .btn:hover { background: #00d4ff; color: #000; }
+    .btn-large {
+      padding: 15px 30px;
+      font-size: 16px;
+    }
+    .btn-success { border-color: #2ed573; }
+    .btn-success:hover { background: #2ed573; }
+    .btn-danger { border-color: #ff4757; }
+    .log {
+      background: #0d0d1a;
+      border-radius: 4px;
+      padding: 10px;
+      height: 500px;
+      overflow-y: auto;
+      font-size: 12px;
+      white-space: pre-wrap;
+    }
+    .log .info { color: #00d4ff; }
+    .log .success { color: #2ed573; }
+    .log .error { color: #ff4757; }
+    .log .warn { color: #ffa502; }
+    .log .data { color: #a29bfe; }
+    .log .highlight { color: #ff6b9d; font-weight: bold; }
+    .device-card {
+      background: #0f3460;
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 10px;
+    }
+    .device-card.has-reports { border-color: #2ed573; }
+    .device-card h3 { color: #00d4ff; margin-bottom: 10px; }
+    .collection-info {
+      background: #1a1a2e;
+      padding: 10px;
+      margin: 5px 0;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+    .report-list {
+      color: #2ed573;
+      font-weight: bold;
+    }
+    .test-btn {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔬 HID 完整扫描工具</h1>
+
+    <div class="warning">
+      <strong>⚠️ 重要：请先关闭 Logitech G Hub！</strong><br>
+      G Hub 会独占鼠标的配置接口，导致浏览器无法访问。<br>
+      关闭方法：右键系统托盘图标 → 退出，或在任务管理器中结束 "lghub.exe" 进程。
+    </div>
+
+    <div class="panel">
+      <h2>步骤 1: 扫描设备</h2>
+      <button class="btn btn-large btn-success" id="btn-scan-all">🔍 扫描所有 Logitech HID 设备</button>
+      <button class="btn" id="btn-scan-receiver">扫描 USB Receiver (046D:C547)</button>
+      <p style="color: #888; margin-top: 10px; font-size: 12px;">
+        点击后在弹出窗口中选择所有可见的 Logitech 设备（可以多选）
+      </p>
+      <div id="devices-container"></div>
+    </div>
+
+    <div class="panel">
+      <h2>📋 日志</h2>
+      <button class="btn" id="btn-clear">清空</button>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    const logEl = document.getElementById('log');
+    const devicesContainer = document.getElementById('devices-container');
+    let openedDevices = [];
+
+    function log(msg, type = 'info') {
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = type;
+      div.textContent = `[${time}] ${msg}`;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function logData(label, data) {
+      const hex = Array.from(data).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+      log(`${label}: ${hex}`, 'data');
+    }
+
+    // 关闭所有设备
+    async function closeAllDevices() {
+      for (const dev of openedDevices) {
+        try {
+          if (dev.opened) await dev.close();
+        } catch (e) {}
+      }
+      openedDevices = [];
+    }
+
+    // 扫描设备
+    async function scanDevices(filters) {
+      await closeAllDevices();
+      devicesContainer.innerHTML = '';
+
+      try {
+        log('正在请求 HID 设备访问...', 'info');
+        log('请在弹出窗口中选择设备（可多选）', 'warn');
+
+        const devices = await navigator.hid.requestDevice({ filters });
+
+        if (devices.length === 0) {
+          log('未选择任何设备', 'warn');
+          return;
+        }
+
+        log(`选择了 ${devices.length} 个设备`, 'success');
+
+        // 同时检查已授权的设备
+        const grantedDevices = await navigator.hid.getDevices();
+        log(`已授权设备总数: ${grantedDevices.length}`, 'info');
+
+        // 合并设备列表
+        const allDevices = [...new Map([...devices, ...grantedDevices].map(d =>
+          [`${d.vendorId}-${d.productId}-${d.collections.map(c => c.usage).join(',')}`, d]
+        )).values()];
+
+        log(`处理 ${allDevices.length} 个唯一设备...`, 'info');
+
+        for (const device of allDevices) {
+          await processDevice(device);
+        }
+
+      } catch (e) {
+        log(`扫描失败: ${e}`, 'error');
+      }
+    }
+
+    // 处理单个设备
+    async function processDevice(device) {
+      const pid = device.productId.toString(16).toUpperCase().padStart(4, '0');
+      const vid = device.vendorId.toString(16).toUpperCase().padStart(4, '0');
+
+      log(`\n=== 设备: ${device.productName || '未知'} (${vid}:${pid}) ===`, 'highlight');
+
+      try {
+        if (!device.opened) {
+          await device.open();
+          log(`  设备已打开`, 'success');
+        }
+        openedDevices.push(device);
+
+        // 监听输入
+        device.addEventListener('inputreport', (e) => {
+          const data = new Uint8Array(e.data.buffer);
+          logData(`[IN ${pid}] Report 0x${e.reportId.toString(16).toUpperCase()}`, data);
+        });
+
+        // 分析 Collections
+        log(`  Collections: ${device.collections.length}`, 'info');
+
+        let hasOutputReports = false;
+        let hasFeatureReports = false;
+        let outputReportIds = [];
+        let featureReportIds = [];
+
+        device.collections.forEach((c, idx) => {
+          const usagePage = c.usagePage.toString(16).toUpperCase().padStart(4, '0');
+          const usage = c.usage.toString(16).toUpperCase().padStart(4, '0');
+
+          // 判断接口类型
+          let interfaceType = '未知';
+          if (c.usagePage === 0x0001 && c.usage === 0x0002) interfaceType = '鼠标';
+          else if (c.usagePage === 0x0001 && c.usage === 0x0006) interfaceType = '键盘';
+          else if (c.usagePage === 0xFF00 || c.usagePage === 0xFF43) interfaceType = '厂商专用 ⭐';
+          else if (c.usagePage === 0x000C) interfaceType = '消费者控制';
+
+          log(`  [${idx}] UsagePage=0x${usagePage} Usage=0x${usage} (${interfaceType})`, 'info');
+
+          if (c.outputReports && c.outputReports.length > 0) {
+            hasOutputReports = true;
+            const ids = c.outputReports.map(r => r.reportId);
+            outputReportIds.push(...ids);
+            log(`      ✅ Output Reports: ${ids.map(id => '0x' + id.toString(16).toUpperCase()).join(', ')}`, 'success');
+          }
+
+          if (c.featureReports && c.featureReports.length > 0) {
+            hasFeatureReports = true;
+            const ids = c.featureReports.map(r => r.reportId);
+            featureReportIds.push(...ids);
+            log(`      ✅ Feature Reports: ${ids.map(id => '0x' + id.toString(16).toUpperCase()).join(', ')}`, 'success');
+          }
+
+          if (c.inputReports && c.inputReports.length > 0) {
+            const ids = c.inputReports.map(r => r.reportId);
+            log(`      Input Reports: ${ids.map(id => '0x' + id.toString(16).toUpperCase()).join(', ')}`, 'info');
+          }
+        });
+
+        // 创建设备卡片
+        const card = document.createElement('div');
+        card.className = `device-card ${(hasOutputReports || hasFeatureReports) ? 'has-reports' : ''}`;
+
+        let collectionsHtml = device.collections.map((c, idx) => {
+          const usagePage = c.usagePage.toString(16).toUpperCase().padStart(4, '0');
+          const usage = c.usage.toString(16).toUpperCase().padStart(4, '0');
+          return `
+            <div class="collection-info">
+              [${idx}] UsagePage: 0x${usagePage} | Usage: 0x${usage}<br>
+              Output: ${c.outputReports?.length || 0} | Feature: ${c.featureReports?.length || 0} | Input: ${c.inputReports?.length || 0}
+            </div>
+          `;
+        }).join('');
+
+        card.innerHTML = `
+          <h3>${device.productName || '未知设备'} (${vid}:${pid})</h3>
+          ${collectionsHtml}
+          ${(hasOutputReports || hasFeatureReports) ? `
+            <div style="margin-top: 10px;">
+              <span class="report-list">可用 Report IDs:</span>
+              ${outputReportIds.length > 0 ? `Output: ${outputReportIds.map(id => '0x' + id.toString(16).toUpperCase()).join(', ')}` : ''}
+              ${featureReportIds.length > 0 ? `Feature: ${featureReportIds.map(id => '0x' + id.toString(16).toUpperCase()).join(', ')}` : ''}
+            </div>
+            <button class="btn btn-success test-btn" data-device-index="${openedDevices.length - 1}">
+              🧪 测试 DPI 设置
+            </button>
+          ` : `
+            <div style="color: #ff4757; margin-top: 10px;">
+              ❌ 此接口没有 Output/Feature Reports，无法发送命令
+            </div>
+          `}
+        `;
+
+        devicesContainer.appendChild(card);
+
+        // 绑定测试按钮
+        const testBtn = card.querySelector('.test-btn');
+        if (testBtn) {
+          testBtn.addEventListener('click', () => testDPI(device, outputReportIds, featureReportIds));
+        }
+
+        if (hasOutputReports || hasFeatureReports) {
+          log(`  🎯 此设备可能支持配置命令！`, 'highlight');
+        }
+
+      } catch (e) {
+        log(`  打开失败: ${e}`, 'error');
+      }
+    }
+
+    // 测试 DPI 设置
+    async function testDPI(device, outputReportIds, featureReportIds) {
+      const pid = device.productId.toString(16).toUpperCase();
+      log(`\n=== 测试 DPI 设置 (设备 ${pid}) ===`, 'highlight');
+
+      // 检查是否有 0x10, 0x11 Report
+      const has0x10 = outputReportIds.includes(0x10) || featureReportIds.includes(0x10);
+      const has0x11 = outputReportIds.includes(0x11) || featureReportIds.includes(0x11);
+
+      if (has0x10 && has0x11) {
+        log('找到 Report 0x10 和 0x11，尝试发送 DPI 命令...', 'success');
+
+        try {
+          // 使用 Output Report
+          if (outputReportIds.includes(0x10)) {
+            log('使用 sendReport (Output)...', 'info');
+
+            // 命令 1
+            const cmd1 = new Uint8Array([0x01, 0x0A, 0x2A, 0x01, 0x00, 0x00]);
+            logData('[OUT] Report 0x10', cmd1);
+            await device.sendReport(0x10, cmd1);
+            await new Promise(r => setTimeout(r, 50));
+
+            // 命令 2 - DPI 3200 (0x0C80)
+            const cmd2 = new Uint8Array([
+              0x01, 0x0B, 0x3A, 0x00, 0x0C, 0x80, 0x04,
+              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+              0x00, 0x00, 0x00, 0x00, 0x00
+            ]);
+            logData('[OUT] Report 0x11 (DPI 3200)', cmd2);
+            await device.sendReport(0x11, cmd2);
+            await new Promise(r => setTimeout(r, 50));
+
+            // 命令 3
+            const cmd3 = new Uint8Array([0x01, 0x07, 0x0A, 0x00, 0x00, 0x00]);
+            logData('[OUT] Report 0x10', cmd3);
+            await device.sendReport(0x10, cmd3);
+
+            log('✅ DPI 命令已发送！请检查鼠标灵敏度是否改变', 'success');
+          }
+          // 使用 Feature Report
+          else if (featureReportIds.includes(0x10)) {
+            log('使用 sendFeatureReport...', 'info');
+
+            const cmd1 = new Uint8Array([0x01, 0x0A, 0x2A, 0x01, 0x00, 0x00]);
+            await device.sendFeatureReport(0x10, cmd1);
+            logData('[OUT] Feature 0x10', cmd1);
+            await new Promise(r => setTimeout(r, 50));
+
+            const cmd2 = new Uint8Array([
+              0x01, 0x0B, 0x3A, 0x00, 0x0C, 0x80, 0x04,
+              0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+              0x00, 0x00, 0x00, 0x00, 0x00
+            ]);
+            await device.sendFeatureReport(0x11, cmd2);
+            logData('[OUT] Feature 0x11', cmd2);
+            await new Promise(r => setTimeout(r, 50));
+
+            const cmd3 = new Uint8Array([0x01, 0x07, 0x0A, 0x00, 0x00, 0x00]);
+            await device.sendFeatureReport(0x10, cmd3);
+            logData('[OUT] Feature 0x10', cmd3);
+
+            log('✅ DPI 命令已发送！', 'success');
+          }
+        } catch (e) {
+          log(`❌ 发送失败: ${e}`, 'error');
+        }
+      } else {
+        log(`此设备没有 Report 0x10/0x11，尝试其他 Report ID...`, 'warn');
+
+        // 尝试发送到可用的 Report
+        for (const reportId of [...outputReportIds, ...featureReportIds].slice(0, 3)) {
+          try {
+            const testData = new Uint8Array([0x01, 0x00, 0x00, 0x00, 0x00, 0x00]);
+            log(`尝试 Report 0x${reportId.toString(16)}...`, 'info');
+
+            if (outputReportIds.includes(reportId)) {
+              await device.sendReport(reportId, testData);
+            } else {
+              await device.sendFeatureReport(reportId, testData);
+            }
+            log(`  Report 0x${reportId.toString(16)} 发送成功`, 'success');
+          } catch (e) {
+            log(`  Report 0x${reportId.toString(16)} 失败: ${e.message}`, 'error');
+          }
+        }
+      }
+    }
+
+    // 扫描所有 Logitech 设备
+    document.getElementById('btn-scan-all').addEventListener('click', () => {
+      scanDevices([{ vendorId: 0x046D }]);
+    });
+
+    // 扫描 Receiver
+    document.getElementById('btn-scan-receiver').addEventListener('click', () => {
+      scanDevices([
+        { vendorId: 0x046D, productId: 0xC547 },
+        { vendorId: 0x046D, productId: 0xC539 },
+        { vendorId: 0x046D, productId: 0xC52B },
+      ]);
+    });
+
+    document.getElementById('btn-clear').addEventListener('click', () => logEl.innerHTML = '');
+
+    log('===========================================', 'info');
+    log('HID 完整扫描工具已就绪', 'info');
+    log('', 'info');
+    log('⚠️ 请先确保 G Hub 已完全关闭！', 'warn');
+    log('', 'info');
+    log('1. 右键系统托盘 G Hub 图标 → 退出', 'info');
+    log('2. 或者打开任务管理器，结束 lghub.exe', 'info');
+    log('3. 然后点击 "扫描所有 Logitech HID 设备"', 'info');
+    log('===========================================', 'info');
+  </script>
+</body>
+</html>

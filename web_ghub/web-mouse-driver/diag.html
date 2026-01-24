@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HID 诊断工具 - PRO X SUPERLIGHT</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Consolas', monospace;
+      background: #1a1a2e;
+      color: #eee;
+      padding: 20px;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { color: #00d4ff; margin-bottom: 20px; }
+    .panel {
+      background: #16213e;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 15px;
+    }
+    .panel h2 { color: #00d4ff; font-size: 16px; margin-bottom: 10px; }
+    .btn {
+      background: #0f3460;
+      color: #fff;
+      border: 1px solid #00d4ff;
+      padding: 8px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-right: 8px;
+      margin-bottom: 8px;
+    }
+    .btn:hover { background: #00d4ff; color: #000; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-success { border-color: #2ed573; }
+    .btn-success:hover { background: #2ed573; }
+    .btn-danger { border-color: #ff4757; }
+    .btn-danger:hover { background: #ff4757; }
+    .log {
+      background: #0d0d1a;
+      border-radius: 4px;
+      padding: 10px;
+      height: 400px;
+      overflow-y: auto;
+      font-size: 12px;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .log .info { color: #00d4ff; }
+    .log .success { color: #2ed573; }
+    .log .error { color: #ff4757; }
+    .log .warn { color: #ffa502; }
+    .log .data { color: #a29bfe; }
+    .device-list { margin-top: 10px; }
+    .device-item {
+      background: #0f3460;
+      padding: 10px;
+      margin-bottom: 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      border: 2px solid transparent;
+    }
+    .device-item:hover { border-color: #00d4ff; }
+    .device-item.selected { border-color: #2ed573; background: #1a4a1a; }
+    .collection {
+      background: #222;
+      padding: 8px;
+      margin: 5px 0;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔬 HID 诊断工具 - Logitech PRO X SUPERLIGHT</h1>
+
+    <div class="panel">
+      <h2>📡 设备选择</h2>
+      <button class="btn btn-success" id="btn-scan">扫描所有 Logitech 设备</button>
+      <button class="btn btn-danger" id="btn-disconnect">断开连接</button>
+      <div class="device-list" id="device-list"></div>
+    </div>
+
+    <div class="panel">
+      <h2>🧪 测试命令 (基于抓包数据)</h2>
+      <p style="color: #888; font-size: 12px; margin-bottom: 10px;">
+        抓包数据: wIndex=2 (Interface 2), Output Report Type
+      </p>
+      <button class="btn" id="btn-test-dpi-800">测试 DPI 800</button>
+      <button class="btn" id="btn-test-dpi-1600">测试 DPI 1600</button>
+      <button class="btn" id="btn-test-dpi-3200">测试 DPI 3200</button>
+      <button class="btn" id="btn-test-raw">发送原始抓包数据</button>
+    </div>
+
+    <div class="panel">
+      <h2>📋 诊断日志</h2>
+      <button class="btn" id="btn-clear">清空</button>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+
+  <script type="module">
+    const logEl = document.getElementById('log');
+    const deviceListEl = document.getElementById('device-list');
+    let selectedDevice = null;
+    let allDevices = [];
+
+    function log(msg, type = 'info') {
+      const time = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = type;
+      div.textContent = `[${time}] ${msg}`;
+      logEl.appendChild(div);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function logData(label, data) {
+      const hex = Array.from(data).map(b => b.toString(16).padStart(2, '0').toUpperCase()).join(' ');
+      log(`${label}: ${hex}`, 'data');
+    }
+
+    // 扫描所有 Logitech 设备
+    document.getElementById('btn-scan').addEventListener('click', async () => {
+      try {
+        log('正在扫描 Logitech HID 设备...', 'info');
+
+        // 请求所有 Logitech 设备
+        const devices = await navigator.hid.requestDevice({
+          filters: [{ vendorId: 0x046D }]
+        });
+
+        if (devices.length === 0) {
+          log('未选择设备', 'warn');
+          return;
+        }
+
+        allDevices = devices;
+        log(`找到 ${devices.length} 个设备`, 'success');
+
+        // 显示设备列表
+        deviceListEl.innerHTML = '';
+        for (let i = 0; i < devices.length; i++) {
+          const dev = devices[i];
+          const div = document.createElement('div');
+          div.className = 'device-item';
+          div.dataset.index = i;
+
+          let collectionsHtml = '';
+          if (dev.collections && dev.collections.length > 0) {
+            collectionsHtml = '<div style="margin-top: 8px;"><strong>Collections:</strong></div>';
+            dev.collections.forEach((c, idx) => {
+              collectionsHtml += `
+                <div class="collection">
+                  [${idx}] UsagePage: 0x${c.usagePage.toString(16).toUpperCase().padStart(4, '0')} |
+                  Usage: 0x${c.usage.toString(16).toUpperCase().padStart(4, '0')} |
+                  Input: ${c.inputReports?.length || 0} |
+                  Output: ${c.outputReports?.length || 0} |
+                  Feature: ${c.featureReports?.length || 0}
+                </div>
+              `;
+
+              // 显示 Report IDs
+              if (c.outputReports?.length > 0) {
+                collectionsHtml += `<div class="collection" style="margin-left: 20px;">Output Report IDs: ${c.outputReports.map(r => '0x' + r.reportId.toString(16).toUpperCase()).join(', ')}</div>`;
+              }
+              if (c.featureReports?.length > 0) {
+                collectionsHtml += `<div class="collection" style="margin-left: 20px;">Feature Report IDs: ${c.featureReports.map(r => '0x' + r.reportId.toString(16).toUpperCase()).join(', ')}</div>`;
+              }
+            });
+          }
+
+          div.innerHTML = `
+            <strong>${dev.productName || '未知设备'}</strong><br>
+            VID: 0x${dev.vendorId.toString(16).toUpperCase().padStart(4, '0')} |
+            PID: 0x${dev.productId.toString(16).toUpperCase().padStart(4, '0')} |
+            Opened: ${dev.opened}
+            ${collectionsHtml}
+          `;
+
+          div.addEventListener('click', async () => {
+            // 选择设备
+            document.querySelectorAll('.device-item').forEach(d => d.classList.remove('selected'));
+            div.classList.add('selected');
+
+            try {
+              if (!dev.opened) {
+                await dev.open();
+                log(`设备已打开: ${dev.productName || 'Unknown'}`, 'success');
+              }
+              selectedDevice = dev;
+
+              // 监听输入
+              dev.addEventListener('inputreport', (e) => {
+                const data = new Uint8Array(e.data.buffer);
+                logData(`[IN] Report 0x${e.reportId.toString(16).toUpperCase()}`, data);
+              });
+
+              // 打印设备详细信息
+              log(`=== 设备详情 ===`, 'info');
+              log(`名称: ${dev.productName}`, 'info');
+              log(`VID: 0x${dev.vendorId.toString(16).toUpperCase()}`, 'info');
+              log(`PID: 0x${dev.productId.toString(16).toUpperCase()}`, 'info');
+              log(`Collections: ${dev.collections.length}`, 'info');
+
+              dev.collections.forEach((c, idx) => {
+                log(`  [${idx}] UsagePage=0x${c.usagePage.toString(16)} Usage=0x${c.usage.toString(16)}`, 'info');
+                log(`      Output Reports: ${c.outputReports?.map(r => '0x' + r.reportId.toString(16)).join(', ') || 'none'}`, 'info');
+                log(`      Feature Reports: ${c.featureReports?.map(r => '0x' + r.reportId.toString(16)).join(', ') || 'none'}`, 'info');
+              });
+
+            } catch (e) {
+              log(`打开设备失败: ${e}`, 'error');
+            }
+          });
+
+          deviceListEl.appendChild(div);
+        }
+      } catch (e) {
+        log(`扫描失败: ${e}`, 'error');
+      }
+    });
+
+    // 断开连接
+    document.getElementById('btn-disconnect').addEventListener('click', async () => {
+      if (selectedDevice?.opened) {
+        await selectedDevice.close();
+        log('设备已断开', 'warn');
+      }
+      selectedDevice = null;
+    });
+
+    // 发送 DPI 命令的函数
+    async function sendDPICommand(dpi) {
+      if (!selectedDevice?.opened) {
+        log('请先选择并打开设备', 'error');
+        return;
+      }
+
+      const dpiHigh = (dpi >> 8) & 0xFF;
+      const dpiLow = dpi & 0xFF;
+      const dpiIndex = [400, 800, 1600, 3200, 6400].indexOf(dpi);
+
+      log(`=== 发送 DPI ${dpi} 命令 ===`, 'info');
+
+      try {
+        // 方法 1: 使用 sendReport (Output Report)
+        log('尝试方法 1: sendReport (Output Report)', 'info');
+
+        // 命令 1: 准备
+        const cmd1 = new Uint8Array([0x01, 0x0A, 0x2A, 0x01, 0x00, 0x00]);
+        logData('[OUT] Report 0x10 (准备)', cmd1);
+        await selectedDevice.sendReport(0x10, cmd1);
+
+        await new Promise(r => setTimeout(r, 50));
+
+        // 命令 2: DPI 设置
+        const cmd2 = new Uint8Array([
+          0x01, 0x0B, 0x3A, 0x00,
+          dpiHigh, dpiLow,
+          dpiIndex + 1,
+          0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00
+        ]);
+        logData(`[OUT] Report 0x11 (DPI ${dpi})`, cmd2);
+        await selectedDevice.sendReport(0x11, cmd2);
+
+        await new Promise(r => setTimeout(r, 50));
+
+        // 命令 3: 确认
+        const cmd3 = new Uint8Array([0x01, 0x07, 0x0A, 0x00, 0x00, 0x00]);
+        logData('[OUT] Report 0x10 (确认)', cmd3);
+        await selectedDevice.sendReport(0x10, cmd3);
+
+        log(`✅ DPI ${dpi} 命令已发送 (方法 1)`, 'success');
+
+      } catch (e1) {
+        log(`方法 1 失败: ${e1}`, 'error');
+
+        try {
+          // 方法 2: 使用 sendFeatureReport
+          log('尝试方法 2: sendFeatureReport', 'info');
+
+          const cmd1 = new Uint8Array([0x01, 0x0A, 0x2A, 0x01, 0x00, 0x00]);
+          await selectedDevice.sendFeatureReport(0x10, cmd1);
+          logData('[OUT] Feature Report 0x10', cmd1);
+
+          await new Promise(r => setTimeout(r, 50));
+
+          const cmd2 = new Uint8Array([
+            0x01, 0x0B, 0x3A, 0x00,
+            dpiHigh, dpiLow,
+            dpiIndex + 1,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00,
+            0x00, 0x00, 0x00, 0x00
+          ]);
+          await selectedDevice.sendFeatureReport(0x11, cmd2);
+          logData('[OUT] Feature Report 0x11', cmd2);
+
+          await new Promise(r => setTimeout(r, 50));
+
+          const cmd3 = new Uint8Array([0x01, 0x07, 0x0A, 0x00, 0x00, 0x00]);
+          await selectedDevice.sendFeatureReport(0x10, cmd3);
+          logData('[OUT] Feature Report 0x10', cmd3);
+
+          log(`✅ DPI ${dpi} 命令已发送 (方法 2)`, 'success');
+
+        } catch (e2) {
+          log(`方法 2 也失败: ${e2}`, 'error');
+        }
+      }
+    }
+
+    // 发送原始抓包数据
+    async function sendRawCapturedData() {
+      if (!selectedDevice?.opened) {
+        log('请先选择并打开设备', 'error');
+        return;
+      }
+
+      log('=== 发送原始抓包数据 (DPI 3200) ===', 'info');
+
+      try {
+        // 完全按照抓包数据发送
+        // Frame 1: 10 01 0a 2a 01 00 00
+        const raw1 = new Uint8Array([0x01, 0x0a, 0x2a, 0x01, 0x00, 0x00]);
+        logData('[OUT] Raw Report 0x10', raw1);
+        await selectedDevice.sendReport(0x10, raw1);
+
+        await new Promise(r => setTimeout(r, 50));
+
+        // Frame 2: 11 01 0b 3a 00 0c 80 04 00 00 00 00 00 00 00 00 00 00 00 00
+        const raw2 = new Uint8Array([
+          0x01, 0x0b, 0x3a, 0x00, 0x0c, 0x80, 0x04,
+          0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+          0x00, 0x00, 0x00, 0x00, 0x00
+        ]);
+        logData('[OUT] Raw Report 0x11', raw2);
+        await selectedDevice.sendReport(0x11, raw2);
+
+        await new Promise(r => setTimeout(r, 50));
+
+        // Frame 3: 10 01 07 0a 00 00 00
+        const raw3 = new Uint8Array([0x01, 0x07, 0x0a, 0x00, 0x00, 0x00]);
+        logData('[OUT] Raw Report 0x10', raw3);
+        await selectedDevice.sendReport(0x10, raw3);
+
+        log('✅ 原始抓包数据已发送', 'success');
+
+      } catch (e) {
+        log(`发送失败: ${e}`, 'error');
+        log('错误详情: ' + e.stack, 'error');
+      }
+    }
+
+    document.getElementById('btn-test-dpi-800').addEventListener('click', () => sendDPICommand(800));
+    document.getElementById('btn-test-dpi-1600').addEventListener('click', () => sendDPICommand(1600));
+    document.getElementById('btn-test-dpi-3200').addEventListener('click', () => sendDPICommand(3200));
+    document.getElementById('btn-test-raw').addEventListener('click', sendRawCapturedData);
+    document.getElementById('btn-clear').addEventListener('click', () => logEl.innerHTML = '');
+
+    log('诊断工具已就绪', 'info');
+    log('请点击 "扫描所有 Logitech 设备" 开始', 'info');
+  </script>
+</body>
+</html>

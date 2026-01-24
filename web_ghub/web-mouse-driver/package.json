@@ -1,0 +1,16 @@
+{
+  "name": "web-mouse-driver",
+  "version": "1.0.0",
+  "description": "WebHID/WebUSB Mouse Driver for DPI and Polling Rate Control",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.0",
+    "vite": "^5.0.0"
+  },
+  "keywords": ["webhid", "webusb", "mouse", "driver", "dpi", "polling-rate"]
+}
