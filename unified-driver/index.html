@@ -4,11 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Web Mouse Driver</title>
-  <link rel="stylesheet" href="css/style.css?v=7">
+  <link rel="stylesheet" href="css/style.css?v=8">
 </head>
 <body>
 
-<div class="container">
+<div class="shell">
 
   <!-- ===================== Header ===================== -->
   <header class="header">
@@ -16,188 +16,171 @@
     <p class="subtitle">Logitech &amp; Razer | WebHID</p>
   </header>
 
-  <!-- ===================== Card 1: Device Connection ===================== -->
-  <section class="card" id="connection-card">
-    <h2>设备连接</h2>
+  <!-- ===================== Two-column layout ===================== -->
+  <div class="layout">
 
-    <div class="status-row">
-      <div class="status-dot" id="status-dot"></div>
-      <span class="status-text" id="status-text">未连接</span>
-    </div>
+    <!-- ===== LEFT column: connection, profiles, battery, log ===== -->
+    <aside class="col-left">
 
-    <div class="btn-group mb-10">
-      <button class="btn" id="btn-connect-logitech">连接 Logitech 鼠标</button>
-      <button class="btn" id="btn-connect-razer">连接 Razer 鼠标</button>
-    </div>
-
-    <div class="btn-group mb-15">
-      <button class="btn btn-danger" id="btn-disconnect" disabled>断开连接</button>
-    </div>
-
-    <!-- Device Info (hidden until connected) -->
-    <div class="hidden" id="device-info">
-      <div class="section-divider"></div>
-      <div class="device-info" style="display:grid">
-        <div class="info-item">
-          <label>设备名称</label>
-          <span id="info-name">—</span>
+      <section class="card" id="connection-card">
+        <h2>设备连接</h2>
+        <div class="status-row">
+          <div class="status-dot" id="status-dot"></div>
+          <span class="status-text" id="status-text">未连接</span>
         </div>
-        <div class="info-item">
-          <label>VID</label>
-          <span id="info-vid">—</span>
+        <div class="btn-group mb-10">
+          <button class="btn btn-block" id="btn-connect-logitech">Logitech</button>
+          <button class="btn btn-block" id="btn-connect-razer">Razer</button>
         </div>
-        <div class="info-item">
-          <label>PID</label>
-          <span id="info-pid">—</span>
+        <button class="btn btn-danger btn-block" id="btn-disconnect" disabled>断开</button>
+
+        <div class="hidden" id="device-info">
+          <div class="section-divider"></div>
+          <div class="device-info">
+            <div class="info-item">
+              <label>名称</label><span id="info-name">—</span>
+            </div>
+            <div class="info-item">
+              <label>VID</label><span id="info-vid">—</span>
+            </div>
+            <div class="info-item">
+              <label>PID</label><span id="info-pid">—</span>
+            </div>
+            <div class="info-item">
+              <label>S/N</label><span id="info-serial">—</span>
+            </div>
+          </div>
+          <div style="margin-top:8px"><span id="info-brand"></span></div>
         </div>
-        <div class="info-item">
-          <label>序列号</label>
-          <span id="info-serial">—</span>
+      </section>
+
+      <!-- Profiles -->
+      <section class="card hidden" id="profile-section">
+        <div class="flex-between mb-10">
+          <h2 style="margin:0;padding:0;border:none">配置方案</h2>
+          <div class="flex gap-6">
+            <button class="btn btn-sm" id="btn-save-quick" title="一键保存">SAVE</button>
+            <button class="btn btn-sm btn-secondary" id="btn-new-profile" title="新建">+</button>
+          </div>
         </div>
-        <div class="info-item" style="grid-column: span 2">
-          <label>品牌</label>
-          <span id="info-brand">—</span>
+        <div class="profile-cards" id="profile-cards"></div>
+        <div class="info-msg mt-10" id="config-restored-msg">已自动应用配置方案</div>
+      </section>
+
+      <!-- Battery -->
+      <section class="card" id="battery-card">
+        <div class="flex-between mb-10">
+          <h2 style="margin:0;padding:0;border:none">电池</h2>
+          <button class="btn btn-sm btn-secondary" id="btn-refresh-battery" disabled>刷新</button>
         </div>
-      </div>
-    </div>
-
-    <!-- Profile Management (shown after connect) -->
-    <div class="hidden mt-15" id="profile-section">
-      <div class="section-divider"></div>
-      <div class="flex-between mb-10">
-        <label class="text-secondary" style="font-size:0.82em;font-family:var(--mono,monospace);letter-spacing:0.05em;text-transform:uppercase">配置方案</label>
-        <div class="flex gap-10">
-          <button class="btn btn-sm" id="btn-save-quick" title="一键保存当前设置">SAVE</button>
-          <button class="btn btn-sm btn-secondary" id="btn-new-profile" title="新建配置方案">+</button>
+        <div class="battery-row">
+          <div class="battery-ring" id="battery-ring">
+            <svg viewBox="0 0 80 80">
+              <circle class="battery-ring-bg" cx="40" cy="40" r="34"/>
+              <circle class="battery-ring-fill" id="battery-ring-fill" cx="40" cy="40" r="34"/>
+            </svg>
+            <div class="battery-ring-text" id="battery-percent">—%</div>
+          </div>
+          <div class="battery-meta">
+            <div class="battery-bar-container">
+              <div class="battery-bar" id="battery-bar" style="width:0%"></div>
+            </div>
+            <div class="text-secondary" id="battery-status" style="font-size:0.78em;margin-top:6px">未知</div>
+          </div>
         </div>
-      </div>
-      <div class="profile-cards" id="profile-cards">
-        <!-- JS renders cards here -->
-      </div>
-    </div>
+      </section>
 
-    <div class="info-msg mt-10" id="config-restored-msg">已自动应用配置方案</div>
-  </section>
+      <!-- Log -->
+      <section class="card" id="log-card">
+        <div class="flex-between mb-10">
+          <h2 style="margin:0;padding:0;border:none">日志</h2>
+          <button class="btn btn-sm btn-secondary" id="btn-clear-log">清除</button>
+        </div>
+        <div class="console" id="log-area"></div>
+      </section>
+    </aside>
 
-  <!-- ===================== Card 2: DPI Settings ===================== -->
-  <section class="card" id="dpi-card">
-    <h2>DPI 设置</h2>
+    <!-- ===== RIGHT column: DPI, polling, rotation ===== -->
+    <main class="col-right">
 
-    <!-- Logitech preset grid -->
-    <div class="dpi-grid mb-15" id="dpi-presets">
-      <button class="dpi-btn" data-dpi="400">400</button>
-      <button class="dpi-btn" data-dpi="800">800</button>
-      <button class="dpi-btn" data-dpi="1600">1600</button>
-      <button class="dpi-btn" data-dpi="3200">3200</button>
-      <button class="dpi-btn" data-dpi="6400">6400</button>
-    </div>
-
-    <!-- Custom DPI input (shared) -->
-    <div class="flex gap-10 mb-15" style="align-items:center">
-      <label class="text-secondary" style="white-space:nowrap;font-size:0.9em">自定义 DPI</label>
-      <input type="number" class="input-field" id="dpi-custom-input" min="100" max="30000" step="50" value="800" placeholder="800" style="max-width:160px">
-    </div>
-
-    <!-- Razer XY DPI controls (hidden for Logitech) -->
-    <div id="dpi-xy-controls" class="hidden">
-      <div class="section-divider"></div>
-
-      <div class="checkbox-group mb-15">
-        <label class="toggle">
-          <input type="checkbox" id="dpi-xy-split-toggle">
-          <span class="toggle-slider"></span>
-        </label>
-        <label>分别设置 X / Y 轴 DPI</label>
-      </div>
-
-      <div id="dpi-xy-sliders">
+      <section class="card" id="dpi-card">
+        <h2>DPI</h2>
+        <div class="dpi-grid mb-10" id="dpi-presets">
+          <button class="dpi-btn" data-dpi="400">400</button>
+          <button class="dpi-btn" data-dpi="800">800</button>
+          <button class="dpi-btn" data-dpi="1600">1600</button>
+          <button class="dpi-btn" data-dpi="3200">3200</button>
+          <button class="dpi-btn" data-dpi="6400">6400</button>
+        </div>
         <div class="flex gap-10 mb-10" style="align-items:center">
-          <label class="text-secondary" style="min-width:24px">X</label>
-          <input type="range" class="slider" id="dpi-x-slider" min="100" max="30000" step="50" value="800" style="flex:1">
-          <input type="number" class="input-field" id="dpi-x-input" min="100" max="30000" step="50" value="800" style="max-width:100px">
+          <label class="text-secondary" style="white-space:nowrap;font-size:0.82em">自定义</label>
+          <input type="number" class="input-field" id="dpi-custom-input" min="100" max="30000" step="50" value="800" placeholder="800" style="max-width:120px">
+          <button class="btn btn-sm" id="btn-apply-dpi" disabled>应用</button>
         </div>
-        <div class="flex gap-10 mb-10 hidden" id="dpi-y-row" style="align-items:center">
-          <label class="text-secondary" style="min-width:24px">Y</label>
-          <input type="range" class="slider" id="dpi-y-slider" min="100" max="30000" step="50" value="800" style="flex:1">
-          <input type="number" class="input-field" id="dpi-y-input" min="100" max="30000" step="50" value="800" style="max-width:100px">
+        <div id="dpi-xy-controls" class="hidden">
+          <div class="section-divider"></div>
+          <div class="checkbox-group mb-10">
+            <label class="toggle"><input type="checkbox" id="dpi-xy-split-toggle"><span class="toggle-slider"></span></label>
+            <label style="font-size:0.85em">X / Y 分离</label>
+          </div>
+          <div id="dpi-xy-sliders">
+            <div class="flex gap-10 mb-8" style="align-items:center">
+              <label class="text-secondary" style="min-width:18px;font-size:0.82em">X</label>
+              <input type="range" class="slider" id="dpi-x-slider" min="100" max="30000" step="50" value="800" style="flex:1">
+              <input type="number" class="input-field" id="dpi-x-input" min="100" max="30000" step="50" value="800" style="max-width:80px">
+            </div>
+            <div class="flex gap-10 mb-8 hidden" id="dpi-y-row" style="align-items:center">
+              <label class="text-secondary" style="min-width:18px;font-size:0.82em">Y</label>
+              <input type="range" class="slider" id="dpi-y-slider" min="100" max="30000" step="50" value="800" style="flex:1">
+              <input type="number" class="input-field" id="dpi-y-input" min="100" max="30000" step="50" value="800" style="max-width:80px">
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
+      </section>
 
-    <div class="mt-15">
-      <button class="btn" id="btn-apply-dpi" disabled>应用 DPI</button>
-    </div>
-  </section>
+      <section class="card" id="polling-card">
+        <div class="flex-between mb-10">
+          <h2 style="margin:0;padding:0;border:none">回报率</h2>
+          <button class="btn btn-sm" id="btn-apply-polling" disabled>应用</button>
+        </div>
+        <div class="polling-grid" id="polling-grid">
+          <button class="polling-btn" data-rate="125">125</button>
+          <button class="polling-btn" data-rate="250">250</button>
+          <button class="polling-btn" data-rate="500">500</button>
+          <button class="polling-btn" data-rate="1000">1K</button>
+          <button class="polling-btn polling-btn-extended" data-rate="2000" style="display:none">2K</button>
+          <button class="polling-btn polling-btn-extended" data-rate="4000" style="display:none">4K</button>
+          <button class="polling-btn polling-btn-extended" data-rate="8000" style="display:none">8K</button>
+        </div>
+      </section>
 
-  <!-- ===================== Card 3: Polling Rate ===================== -->
-  <section class="card" id="polling-card">
-    <h2>回报率</h2>
+      <section class="card hidden" id="rotation-card">
+        <div class="flex-between mb-10">
+          <h2 style="margin:0;padding:0;border:none">旋转角度</h2>
+          <button class="btn btn-sm" id="btn-apply-rotation" disabled>应用</button>
+        </div>
+        <div class="rotation-control">
+          <button class="rotation-btn" id="btn-rotation-minus">&minus;</button>
+          <input type="range" class="slider" id="rotation-slider" min="-44" max="44" step="1" value="0" style="flex:1">
+          <div class="rotation-value" id="rotation-value">0&deg;</div>
+          <button class="rotation-btn" id="btn-rotation-plus">+</button>
+        </div>
+      </section>
 
-    <div class="polling-grid mb-15" id="polling-grid">
-      <button class="polling-btn" data-rate="125">125 Hz</button>
-      <button class="polling-btn" data-rate="250">250 Hz</button>
-      <button class="polling-btn" data-rate="500">500 Hz</button>
-      <button class="polling-btn" data-rate="1000">1000 Hz</button>
-      <button class="polling-btn polling-btn-extended" data-rate="2000" style="display:none">2000 Hz</button>
-      <button class="polling-btn polling-btn-extended" data-rate="4000" style="display:none">4000 Hz</button>
-      <button class="polling-btn polling-btn-extended" data-rate="8000" style="display:none">8000 Hz</button>
-    </div>
+    </main>
+  </div>
 
-    <button class="btn" id="btn-apply-polling" disabled>应用回报率</button>
-  </section>
-
-  <!-- ===================== Card 4: Battery Status ===================== -->
-  <section class="card" id="battery-card">
-    <h2>电池状态</h2>
-
-    <div class="flex gap-15 mb-15" style="align-items:center">
-      <div class="battery-bar-container" style="flex:1">
-        <div class="battery-bar" id="battery-bar" style="width:0%"></div>
-      </div>
-      <div class="battery-level" id="battery-percent">—%</div>
-    </div>
-
-    <div class="text-secondary mb-15" id="battery-status" style="font-size:0.95em">状态：未知</div>
-
-    <button class="btn" id="btn-refresh-battery" disabled>刷新电量</button>
-  </section>
-
-  <!-- ===================== Card 5: Mouse Rotation (Razer only) ===================== -->
-  <section class="card hidden" id="rotation-card">
-    <h2>鼠标旋转角度</h2>
-
-    <div class="rotation-control mb-15">
-      <button class="rotation-btn" id="btn-rotation-minus">&minus;</button>
-      <input type="range" class="slider" id="rotation-slider" min="-44" max="44" step="1" value="0" style="flex:1">
-      <div class="rotation-value" id="rotation-value">0&deg;</div>
-      <button class="rotation-btn" id="btn-rotation-plus">+</button>
-    </div>
-
-    <button class="btn" id="btn-apply-rotation" disabled>应用旋转角度</button>
-  </section>
-
-  <!-- ===================== Card 6: Communication Log ===================== -->
-  <section class="card" id="log-card">
-    <div class="flex-between mb-10">
-      <h2 style="margin-bottom:0;padding-bottom:0;border-bottom:none">通信日志</h2>
-      <button class="btn btn-sm btn-secondary" id="btn-clear-log">清除</button>
-    </div>
-    <div class="console" id="log-area"></div>
-  </section>
-
-  <!-- ===================== Footer ===================== -->
   <footer class="footer">
-    <div>Web Mouse Driver v2.0 | WebHID</div>
-    <div class="browser-note">需要 Chrome 89+ 或 Edge 89+</div>
+    <div>Web Mouse Driver v2.0 | WebHID | Chrome 89+</div>
   </footer>
 
 </div>
 
 <!-- ===================== Application Logic ===================== -->
 <script type="module">
-import { RazerProtocol } from './js/protocols/razer-protocol.js?v=7';
-import { LogitechHIDPP } from './js/protocols/logitech-hidpp.js?v=7';
-import { ConfigStore } from './js/config-store.js?v=7';
+import { RazerProtocol } from './js/protocols/razer-protocol.js?v=8';
+import { LogitechHIDPP } from './js/protocols/logitech-hidpp.js?v=8';
+import { ConfigStore } from './js/config-store.js?v=8';
 
 /* ------------------------------------------------------------------
  *  App State
@@ -251,6 +234,7 @@ const $pollingGrid       = document.getElementById('polling-grid');
 const $btnApplyPolling   = document.getElementById('btn-apply-polling');
 
 const $batteryBar        = document.getElementById('battery-bar');
+const $batteryRingFill   = document.getElementById('battery-ring-fill');
 const $batteryPercent    = document.getElementById('battery-percent');
 const $batteryStatus     = document.getElementById('battery-status');
 const $btnRefreshBattery = document.getElementById('btn-refresh-battery');
@@ -657,12 +641,19 @@ async function refreshBattery() {
     log('查询电池状态...', 'send');
     const bat = await protocol.getBattery();
 
-    $batteryBar.style.width = bat.level + '%';
+    const pct = bat.level;
+    $batteryBar.style.width = pct + '%';
     $batteryBar.classList.remove('low', 'medium');
-    if (bat.level <= 20) $batteryBar.classList.add('low');
-    else if (bat.level <= 50) $batteryBar.classList.add('medium');
+    $batteryRingFill.classList.remove('low', 'medium');
+    if (pct <= 20) { $batteryBar.classList.add('low'); $batteryRingFill.classList.add('low'); }
+    else if (pct <= 50) { $batteryBar.classList.add('medium'); $batteryRingFill.classList.add('medium'); }
 
-    $batteryPercent.textContent = bat.level + '%';
+    // Ring: circumference = 2 * PI * 34 ≈ 213.6
+    const circ = 213.6;
+    $batteryRingFill.style.strokeDashoffset = circ - (circ * pct / 100);
+
+    $batteryPercent.textContent = pct + '%';
+    $batteryPercent.style.color = pct <= 20 ? 'var(--danger)' : pct <= 50 ? 'var(--warning)' : 'var(--success)';
 
     let statusStr = bat.charging ? '充电中' : '未充电';
     if (brand === 'logitech' && bat.status) {
