@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Web Mouse Driver</title>
-  <link rel="stylesheet" href="css/style.css?v=6">
+  <link rel="stylesheet" href="css/style.css?v=7">
 </head>
 <body>
 
@@ -66,17 +66,13 @@
       <div class="section-divider"></div>
       <div class="flex-between mb-10">
         <label class="text-secondary" style="font-size:0.82em;font-family:var(--mono,monospace);letter-spacing:0.05em;text-transform:uppercase">配置方案</label>
-        <button class="btn btn-sm btn-secondary" id="btn-new-profile">+ 新建</button>
+        <div class="flex gap-10">
+          <button class="btn btn-sm" id="btn-save-quick" title="一键保存当前设置">SAVE</button>
+          <button class="btn btn-sm btn-secondary" id="btn-new-profile" title="新建配置方案">+</button>
+        </div>
       </div>
-      <div class="flex gap-10 mb-10" style="align-items:center">
-        <select id="profile-select" class="saved-devices" style="flex:1">
-          <option value="">— 无配置 —</option>
-        </select>
-        <button class="btn btn-sm" id="btn-apply-profile" disabled>应用</button>
-        <button class="btn btn-sm btn-danger" id="btn-delete-profile" disabled style="padding:7px 10px">删除</button>
-      </div>
-      <div class="flex gap-10" style="align-items:center">
-        <button class="btn btn-sm btn-secondary" id="btn-save-current" disabled>保存当前设置到选中方案</button>
+      <div class="profile-cards" id="profile-cards">
+        <!-- JS renders cards here -->
       </div>
     </div>
 
@@ -199,9 +195,9 @@
 
 <!-- ===================== Application Logic ===================== -->
 <script type="module">
-import { RazerProtocol } from './js/protocols/razer-protocol.js?v=6';
-import { LogitechHIDPP } from './js/protocols/logitech-hidpp.js?v=6';
-import { ConfigStore } from './js/config-store.js?v=6';
+import { RazerProtocol } from './js/protocols/razer-protocol.js?v=7';
+import { LogitechHIDPP } from './js/protocols/logitech-hidpp.js?v=7';
+import { ConfigStore } from './js/config-store.js?v=7';
 
 /* ------------------------------------------------------------------
  *  App State
@@ -234,12 +230,11 @@ const $infoPid           = document.getElementById('info-pid');
 const $infoSerial        = document.getElementById('info-serial');
 const $infoBrand         = document.getElementById('info-brand');
 const $profileSection    = document.getElementById('profile-section');
-const $profileSelect     = document.getElementById('profile-select');
+const $profileCards      = document.getElementById('profile-cards');
 const $btnNewProfile     = document.getElementById('btn-new-profile');
-const $btnApplyProfile   = document.getElementById('btn-apply-profile');
-const $btnDeleteProfile  = document.getElementById('btn-delete-profile');
-const $btnSaveCurrent    = document.getElementById('btn-save-current');
+const $btnSaveQuick      = document.getElementById('btn-save-quick');
 const $configRestoredMsg = document.getElementById('config-restored-msg');
+let activeProfileName    = null;
 
 const $dpiPresets        = document.getElementById('dpi-presets');
 const $dpiCustomInput    = document.getElementById('dpi-custom-input');
@@ -375,34 +370,103 @@ function showDeviceInfo(info, b) {
  * ---------------------------------------------------------------- */
 async function refreshProfileList() {
   if (!deviceInfo) return;
-  const names = await configStore.listProfiles(deviceInfo);
   const dev = await configStore.getDevice(deviceInfo);
+  const profiles = dev && dev.profiles ? dev.profiles : {};
   const active = dev ? dev.activeProfile : null;
+  activeProfileName = active;
 
-  $profileSelect.innerHTML = '';
+  $profileCards.innerHTML = '';
 
+  const names = Object.keys(profiles);
   if (names.length === 0) {
-    const opt = document.createElement('option');
-    opt.value = '';
-    opt.textContent = '— 无配置方案 —';
-    $profileSelect.appendChild(opt);
-    $btnApplyProfile.disabled = true;
-    $btnDeleteProfile.disabled = true;
-    $btnSaveCurrent.disabled = true;
+    $profileCards.innerHTML = '<div class="profile-empty">无配置方案 — 点击 + 创建</div>';
+    $btnSaveQuick.disabled = true;
     return;
   }
+  $btnSaveQuick.disabled = false;
 
   for (const name of names) {
-    const opt = document.createElement('option');
-    opt.value = name;
-    opt.textContent = name + (name === active ? ' (当前)' : '');
-    if (name === active) opt.selected = true;
-    $profileSelect.appendChild(opt);
-  }
+    const p = profiles[name];
+    const isActive = name === active;
+    const card = document.createElement('div');
+    card.className = `pcard${isActive ? ' pcard-active' : ''}`;
+    card.dataset.name = name;
 
-  $btnApplyProfile.disabled = false;
-  $btnDeleteProfile.disabled = false;
-  $btnSaveCurrent.disabled = false;
+    const hz = p.pollingRate || 1000;
+    const dpi = p.dpiX || 800;
+    const dpiY = p.dpiY || dpi;
+    const dpiLabel = dpi === dpiY ? dpi : `${dpi}/${dpiY}`;
+
+    card.innerHTML = `
+      <div class="pcard-name" title="双击重命名">${name}</div>
+      <div class="pcard-stats">
+        <span class="pcard-tag">${dpiLabel} DPI</span>
+        <span class="pcard-tag">${hz} Hz</span>
+      </div>
+      ${isActive ? '<div class="pcard-indicator"></div>' : ''}
+      <button class="pcard-del" title="删除">&times;</button>
+    `;
+
+    // Click -> apply this profile
+    card.addEventListener('click', (e) => {
+      if (e.target.closest('.pcard-del') || e.target.closest('.pcard-rename-input')) return;
+      applyProfileByName(name);
+    });
+
+    // Double-click name -> inline rename
+    const nameEl = card.querySelector('.pcard-name');
+    nameEl.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      startInlineRename(card, name, nameEl);
+    });
+
+    // Delete button
+    card.querySelector('.pcard-del').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await configStore.deleteProfile(deviceInfo, name);
+      log(`已删除方案 "${name}"`, 'info');
+      await refreshProfileList();
+    });
+
+    $profileCards.appendChild(card);
+  }
+}
+
+function startInlineRename(card, oldName, nameEl) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.className = 'pcard-rename-input';
+  input.value = oldName;
+  nameEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  const commit = async () => {
+    const newName = input.value.trim();
+    if (newName && newName !== oldName) {
+      await configStore.renameProfile(deviceInfo, oldName, newName);
+      log(`方案已重命名: "${oldName}" -> "${newName}"`, 'success');
+    }
+    await refreshProfileList();
+  };
+
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { input.blur(); }
+    if (e.key === 'Escape') { input.value = oldName; input.blur(); }
+  });
+}
+
+async function applyProfileByName(name) {
+  if (!deviceInfo) return;
+  const profile = await configStore.getProfile(deviceInfo, name);
+  if (!profile) return;
+  await configStore.setActiveProfile(deviceInfo, name);
+  activeProfileName = name;
+  restoreUIFromProfile(profile);
+  log(`正在应用方案 "${name}"...`, 'info');
+  await autoApplyConfig(profile);
+  await refreshProfileList();
 }
 
 function restoreUIFromProfile(s) {
@@ -823,50 +887,44 @@ $btnRotPlus.addEventListener('click', () => {
 $btnApplyRotation.addEventListener('click', applyRotation);
 
 // --- Profile management ---
-$profileSelect.addEventListener('change', () => {
-  const hasVal = !!$profileSelect.value;
-  $btnApplyProfile.disabled = !hasVal;
-  $btnDeleteProfile.disabled = !hasVal;
-  $btnSaveCurrent.disabled = !hasVal;
-});
-
-$btnApplyProfile.addEventListener('click', async () => {
-  const name = $profileSelect.value;
-  if (!name || !deviceInfo) return;
-  const profile = await configStore.getProfile(deviceInfo, name);
-  if (!profile) return;
-  await configStore.setActiveProfile(deviceInfo, name);
-  restoreUIFromProfile(profile);
-  log(`正在应用方案 "${name}"...`, 'info');
-  await autoApplyConfig(profile);
-  await refreshProfileList();
-});
-
-$btnDeleteProfile.addEventListener('click', async () => {
-  const name = $profileSelect.value;
-  if (!name || !deviceInfo) return;
-  await configStore.deleteProfile(deviceInfo, name);
-  log(`已删除方案 "${name}"`, 'info');
-  await refreshProfileList();
-});
-
 $btnNewProfile.addEventListener('click', async () => {
   if (!deviceInfo) return;
-  const name = prompt('输入配置方案名称:');
-  if (!name || !name.trim()) return;
   const settings = getCurrentSettings();
-  await configStore.saveProfile(deviceInfo, name.trim(), settings);
-  await configStore.setActiveProfile(deviceInfo, name.trim());
-  log(`已创建方案 "${name.trim()}"`, 'success');
+  // Generate name: "Profile 1", "Profile 2", etc.
+  const dev = await configStore.getDevice(deviceInfo);
+  const existing = dev && dev.profiles ? Object.keys(dev.profiles) : [];
+  let idx = existing.length + 1;
+  let name = `Profile ${idx}`;
+  while (existing.includes(name)) { idx++; name = `Profile ${idx}`; }
+
+  await configStore.saveProfile(deviceInfo, name, settings);
+  await configStore.setActiveProfile(deviceInfo, name);
+  activeProfileName = name;
+  log(`已创建方案 "${name}"`, 'success');
   await refreshProfileList();
+
+  // Auto start inline rename on the new card
+  const newCard = $profileCards.querySelector(`[data-name="${name}"]`);
+  if (newCard) {
+    const nameEl = newCard.querySelector('.pcard-name');
+    if (nameEl) startInlineRename(newCard, name, nameEl);
+  }
 });
 
-$btnSaveCurrent.addEventListener('click', async () => {
-  const name = $profileSelect.value;
-  if (!name || !deviceInfo) return;
+$btnSaveQuick.addEventListener('click', async () => {
+  if (!deviceInfo || !activeProfileName) return;
   const settings = getCurrentSettings();
-  await configStore.saveProfile(deviceInfo, name, settings);
-  log(`已保存当前设置到方案 "${name}"`, 'success');
+  await configStore.saveProfile(deviceInfo, activeProfileName, settings);
+  log(`已保存到方案 "${activeProfileName}"`, 'success');
+
+  // Flash feedback
+  $btnSaveQuick.textContent = 'SAVED';
+  $btnSaveQuick.style.background = 'var(--success)';
+  setTimeout(() => {
+    $btnSaveQuick.textContent = 'SAVE';
+    $btnSaveQuick.style.background = '';
+  }, 1200);
+  await refreshProfileList();
 });
 
 // --- Log ---

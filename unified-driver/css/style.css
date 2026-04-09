@@ -416,6 +416,152 @@ body::after {
 
 .polling-btn:disabled { opacity: 0.2; cursor: not-allowed; }
 
+/* --- Profile Cards --- */
+.profile-cards {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 4px 0;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.profile-cards::-webkit-scrollbar { display: none; }
+
+.profile-empty {
+  font-family: var(--mono);
+  font-size: 0.78em;
+  color: var(--text-3);
+  text-align: center;
+  padding: 16px;
+  width: 100%;
+}
+
+.pcard {
+  flex: 0 0 auto;
+  width: 140px;
+  min-height: 80px;
+  background: var(--surface-2);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.2s var(--ease-out);
+  scroll-snap-align: start;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 6px;
+  user-select: none;
+}
+
+.pcard:hover {
+  border-color: var(--text-3);
+  background: var(--surface-3);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+}
+
+.pcard-active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  box-shadow: 0 0 12px var(--accent-dim), inset 0 0 20px rgba(68,255,210,0.04);
+}
+
+.pcard-active:hover {
+  border-color: var(--accent-bright);
+}
+
+.pcard-indicator {
+  position: absolute;
+  top: 0; left: 16px; right: 16px;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 0 0 2px 2px;
+  box-shadow: 0 0 8px var(--accent-glow);
+}
+
+.pcard-name {
+  font-family: var(--mono);
+  font-size: 0.82em;
+  font-weight: 700;
+  color: var(--text-0);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.pcard-active .pcard-name {
+  color: var(--accent);
+}
+
+.pcard-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.pcard-tag {
+  font-family: var(--mono);
+  font-size: 0.62em;
+  font-weight: 600;
+  color: var(--text-2);
+  background: rgba(255,255,255,0.04);
+  padding: 2px 6px;
+  border-radius: var(--radius-xs);
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.pcard-active .pcard-tag {
+  color: var(--accent);
+  background: rgba(68,255,210,0.08);
+}
+
+.pcard-del {
+  position: absolute;
+  top: 4px; right: 4px;
+  width: 18px; height: 18px;
+  border: none;
+  background: transparent;
+  color: var(--text-3);
+  font-size: 14px;
+  font-family: var(--sans);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  opacity: 0;
+  transition: all 0.15s;
+  line-height: 1;
+}
+
+.pcard:hover .pcard-del { opacity: 1; }
+
+.pcard-del:hover {
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+
+.pcard-rename-input {
+  font-family: var(--mono);
+  font-size: 0.82em;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--surface-0);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-xs);
+  padding: 2px 6px;
+  width: 100%;
+  outline: none;
+  box-shadow: 0 0 8px var(--accent-dim);
+}
+
 /* --- Slider --- */
 .slider {
   -webkit-appearance: none;
