@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Web Mouse Driver</title>
-  <link rel="stylesheet" href="css/style.css?v=4">
+  <link rel="stylesheet" href="css/style.css?v=5">
 </head>
 <body>
 
@@ -194,9 +194,9 @@
 
 <!-- ===================== Application Logic ===================== -->
 <script type="module">
-import { RazerProtocol } from './js/protocols/razer-protocol.js?v=4';
-import { LogitechHIDPP } from './js/protocols/logitech-hidpp.js?v=4';
-import { ConfigStore } from './js/config-store.js?v=4';
+import { RazerProtocol } from './js/protocols/razer-protocol.js?v=5';
+import { LogitechHIDPP } from './js/protocols/logitech-hidpp.js?v=5';
+import { ConfigStore } from './js/config-store.js?v=5';
 
 /* ------------------------------------------------------------------
  *  App State
@@ -211,6 +211,8 @@ let selectedDpiX = 800;
 let selectedDpiY = 800;
 let selectedPollingRate = null;
 let selectedRotation = 0;
+let batteryTimer = null;
+const BATTERY_POLL_MS = 60000; // 60s
 
 /* ------------------------------------------------------------------
  *  DOM References
@@ -478,15 +480,19 @@ async function connectDevice(targetBrand) {
       log('序列号: 未获取到', 'info');
     }
 
-    // Try to restore saved config from server
+    // Auto-apply saved config
     const saved = await configStore.load(deviceInfo);
-    if (saved) {
+    if (saved && saved.settings) {
       restoreUIFromConfig(saved);
       $configRestoredMsg.classList.add('visible');
-      log('检测到保存的配置，已填充参数', 'info');
+      log('检测到保存的配置，正在自动应用...', 'info');
+      await autoApplyConfig(saved.settings);
     }
 
     await populateSavedDevices();
+
+    // Auto-query battery immediately, then poll every 60s
+    startBatteryPolling();
 
   } catch (err) {
     log(`连接失败: ${err.message}`, 'error');
@@ -497,10 +503,11 @@ async function connectDevice(targetBrand) {
 }
 
 async function disconnectDevice() {
+  stopBatteryPolling();
   if (!protocol) return;
   try {
     await protocol.disconnect();
-    log('已断开连接', 'error');
+    log('已断开连接', 'info');
   } catch (err) {
     log(`断开失败: ${err.message}`, 'error');
   }
@@ -591,6 +598,70 @@ async function refreshBattery() {
     log(`电池: ${bat.level}% | ${statusStr}`, 'success');
   } catch (err) {
     log(`电池查询失败: ${err.message}`, 'error');
+  }
+}
+
+/* ------------------------------------------------------------------
+ *  Auto-apply saved config after connect
+ * ---------------------------------------------------------------- */
+async function autoApplyConfig(settings) {
+  try {
+    // Apply DPI
+    if (settings.dpiX) {
+      if (brand === 'logitech') {
+        log(`自动应用 DPI: ${settings.dpiX}`, 'send');
+        await protocol.setDPI(settings.dpiX);
+        log(`DPI 已应用: ${settings.dpiX}`, 'success');
+      } else {
+        const dy = settings.dpiY || settings.dpiX;
+        log(`自动应用 DPI: X=${settings.dpiX} Y=${dy}`, 'send');
+        await protocol.setDPI(settings.dpiX, dy);
+        log(`DPI 已应用: X=${settings.dpiX} Y=${dy}`, 'success');
+      }
+    }
+
+    // Apply polling rate
+    if (settings.pollingRate) {
+      log(`自动应用回报率: ${settings.pollingRate} Hz`, 'send');
+      await protocol.setPollingRate(settings.pollingRate);
+      log(`回报率已应用: ${settings.pollingRate} Hz`, 'success');
+    }
+
+    // Apply rotation (Razer only)
+    if (brand === 'razer' && settings.rotation !== undefined && settings.rotation !== 0) {
+      log(`自动应用旋转角度: ${settings.rotation}\u00B0`, 'send');
+      await protocol.setRotation(settings.rotation);
+      log(`旋转角度已应用: ${settings.rotation}\u00B0`, 'success');
+    }
+
+    log('保存的配置已全部应用', 'success');
+  } catch (err) {
+    log(`自动应用配置失败: ${err.message}`, 'error');
+  }
+}
+
+/* ------------------------------------------------------------------
+ *  Battery polling
+ * ---------------------------------------------------------------- */
+function startBatteryPolling() {
+  stopBatteryPolling();
+  // Immediate first query
+  refreshBattery();
+  // Then poll periodically
+  batteryTimer = setInterval(() => {
+    if (protocol && protocol.isConnected()) {
+      refreshBattery();
+    } else {
+      stopBatteryPolling();
+    }
+  }, BATTERY_POLL_MS);
+  log(`电量自动刷新已启动 (${BATTERY_POLL_MS / 1000}s)`, 'info');
+}
+
+function stopBatteryPolling() {
+  if (batteryTimer) {
+    clearInterval(batteryTimer);
+    batteryTimer = null;
   }
 }
 
