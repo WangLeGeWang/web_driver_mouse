@@ -4,6 +4,7 @@ WORKDIR /app
 
 COPY server.js .
 COPY index.html .
+COPY info.jpg .
 COPY css/ ./css/
 COPY js/ ./js/
 
