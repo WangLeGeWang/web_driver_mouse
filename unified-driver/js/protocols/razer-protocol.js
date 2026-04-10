@@ -6,6 +6,8 @@
  * interface), since Razer mice expose 3+ interfaces per device.
  */
 
+import { getRazerDevice } from '../devices.js';
+
 const RAZER_VENDOR_ID = 0x1532;
 const REPORT_LEN = 90;
 const REPORT_ID  = 0x00;
@@ -15,27 +17,17 @@ const STATUS_BUSY    = 0x01;
 const STATUS_SUCCESS = 0x02;
 const STATUS_FAILURE = 0x03;
 
-/* Standard polling rate bitmask (Viper V3 Pro, etc.) */
 const POLLING_RATE_MAP = {
   125:  0x01, 250:  0x02, 500:  0x04, 1000: 0x08,
   2000: 0x10, 4000: 0x20, 8000: 0x40,
 };
 
-/* Reversed polling rate bitmask (Viper V3 HyperSpeed, etc.)
-   These devices interpret the bits in opposite order. */
 const POLLING_RATE_MAP_REV = {
   125:  0x40, 250:  0x20, 500:  0x10, 1000: 0x08,
   2000: 0x04, 4000: 0x02, 8000: 0x01,
 };
 
-/* PIDs that use the reversed polling rate mapping */
-const REVERSED_POLLING_PIDS = new Set([
-  0x00BE, // DeathAdder V4 Pro (Wired)
-  0x00BF, // DeathAdder V4 Pro (Wireless)
-]);
-
-/* Viper V3 Pro (0x00C0/0x00C1) uses TX 0x1f for all commands */
-const DEFAULT_TX_ID = 0x1F;
+const DEFAULT_TX_ID = 0x1F; // fallback for probe before device DB is loaded
 const MAX_RETRIES   = 10;
 const RETRY_BASE_MS = 20;
 
@@ -173,9 +165,19 @@ export class RazerProtocol {
 
     this._device = controlDevice;
 
+    // Look up device in database
+    const pid = controlDevice.productId;
+    const devDb = getRazerDevice(pid);
+    this._devDb = devDb;
+    _log(`Device DB: "${devDb.name}" type=${devDb.type} txId=0x${devDb.txId.toString(16)} pollingReversed=${devDb.pollingReversed}`, 'info');
+
     // Wire up input reports
     this._boundInputHandler = this._onInput.bind(this);
     this._device.addEventListener('inputreport', this._boundInputHandler);
+
+    // Flush any stale response from the probe before querying serial
+    await _sleep(50);
+    try { await this._device.receiveFeatureReport(REPORT_ID); } catch (_) {}
 
     // Query serial number
     _log('Querying serial number...', 'info');
@@ -183,7 +185,7 @@ export class RazerProtocol {
     _log(`Serial: "${serial || '(empty)'}"`, serial ? 'success' : 'info');
 
     this._deviceInfo = {
-      name:         controlDevice.productName || 'Razer Mouse',
+      name:         devDb.name !== 'Unknown' ? devDb.name : (controlDevice.productName || 'Razer Mouse'),
       vendorId:     controlDevice.vendorId,
       productId:    controlDevice.productId,
       serialNumber: serial,
@@ -228,13 +230,12 @@ export class RazerProtocol {
   /* ======================== Polling Rate ======================== */
 
   async setPollingRate(rateHz) {
-    const pid = this._deviceInfo ? this._deviceInfo.productId : 0;
-    const map = REVERSED_POLLING_PIDS.has(pid) ? POLLING_RATE_MAP_REV : POLLING_RATE_MAP;
+    const reversed = this._devDb && this._devDb.pollingReversed;
+    const map = reversed ? POLLING_RATE_MAP_REV : POLLING_RATE_MAP;
     const mask = map[rateHz];
     if (mask === undefined) throw new Error(`Unsupported rate ${rateHz} Hz`);
 
-    const rev = REVERSED_POLLING_PIDS.has(pid) ? ' [REV]' : '';
-    _log(`Setting polling rate ${rateHz} Hz (mask=0x${mask.toString(16)}${rev} PID=0x${pid.toString(16)})`, 'info');
+    _log(`Setting polling rate ${rateHz} Hz (mask=0x${mask.toString(16)}${reversed ? ' [REV]' : ''})`, 'info');
     const cmd = this._buildBuf(0x00, 0x40, 0x02, [0x01, mask]);
     return this._sendCmd(cmd);
   }
@@ -245,7 +246,7 @@ export class RazerProtocol {
     _log('Querying battery...', 'info');
 
     // Battery level
-    const levelCmd = this._buildBuf(0x07, 0x80, 0x02, [0x00, 0x00], DEFAULT_TX_ID);
+    const levelCmd = this._buildBuf(0x07, 0x80, 0x02, [0x00, 0x00]);
     const levelResp = await this._sendAndRecv(levelCmd);
 
     let level = 0;
@@ -260,7 +261,7 @@ export class RazerProtocol {
     await _sleep(60);
 
     // Charging status
-    const chargeCmd = this._buildBuf(0x07, 0x84, 0x02, [0x00, 0x00], DEFAULT_TX_ID);
+    const chargeCmd = this._buildBuf(0x07, 0x84, 0x02, [0x00, 0x00]);
     const chargeResp = await this._sendAndRecv(chargeCmd);
 
     let charging = false;
@@ -304,12 +305,13 @@ export class RazerProtocol {
   }
 
   /**
-   * Build 90-byte command. Uses DEFAULT_TX_ID (0x1F) by default.
+   * Build 90-byte command. Uses device-specific txId by default.
    */
   _buildBuf(cls, id, size, args = [], txId = null) {
     const buf = new Uint8Array(REPORT_LEN);
     buf[0] = STATUS_NEW;
-    buf[1] = txId !== null ? (txId & 0xFF) : DEFAULT_TX_ID;
+    const defaultTx = this._devDb ? this._devDb.txId : 0x1F;
+    buf[1] = txId !== null ? (txId & 0xFF) : defaultTx;
     buf[5] = size;
     buf[6] = cls;
     buf[7] = id;
@@ -373,7 +375,7 @@ export class RazerProtocol {
    */
   async _querySerial() {
     try {
-      const cmd = this._buildBuf(0x00, 0x82, 0x16, [], DEFAULT_TX_ID);
+      const cmd = this._buildBuf(0x00, 0x82, 0x16, []);
       const resp = await this._sendAndRecv(cmd);
       if (!resp || resp[0] !== STATUS_SUCCESS) {
         _log(`Serial query failed (status=${resp ? '0x' + resp[0].toString(16) : 'null'})`, 'error');
