@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Web Mouse Driver</title>
-  <link rel="stylesheet" href="css/style.css?v=12">
+  <link rel="stylesheet" href="css/style.css?v=13">
 </head>
 <body>
 
@@ -219,9 +219,9 @@
 
 <!-- ===================== Application Logic ===================== -->
 <script type="module">
-import { RazerProtocol } from './js/protocols/razer-protocol.js?v=12';
-import { LogitechHIDPP } from './js/protocols/logitech-hidpp.js?v=12';
-import { ConfigStore } from './js/config-store.js?v=12';
+import { RazerProtocol } from './js/protocols/razer-protocol.js?v=13';
+import { LogitechHIDPP } from './js/protocols/logitech-hidpp.js?v=13';
+import { ConfigStore } from './js/config-store.js?v=13';
 
 /* ------------------------------------------------------------------
  *  App State
@@ -964,7 +964,7 @@ $btnClearLog.addEventListener('click', () => {
   $logArea.innerHTML = '';
 });
 
-// --- Mouse Test Area ---
+// --- Mouse Test Area (uses getCoalescedEvents for true 8K Hz measurement) ---
 {
   const area = document.getElementById('test-area');
   const cross = document.getElementById('test-crosshair');
@@ -974,44 +974,56 @@ $btnClearLog.addEventListener('click', () => {
   const $tx = document.getElementById('test-x');
   const $ty = document.getElementById('test-y');
 
-  let events = []; // timestamps of recent mousemove events
+  let timestamps = [];  // coalesced event timestamps for rate calculation
   let lastX = 0, lastY = 0, lastT = 0;
   let speedSmooth = 0;
   const dots = [];
-  const MAX_DOTS = 40;
+  const MAX_DOTS = 50;
 
-  area.addEventListener('mousemove', (e) => {
+  area.addEventListener('pointermove', (e) => {
     const rect = area.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
     const t = performance.now();
+
+    // Use getCoalescedEvents() to count raw hardware reports
+    // Each coalesced event = one USB HID report from the mouse
+    const coalesced = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
+
+    for (const ce of coalesced) {
+      timestamps.push(ce.timeStamp || t);
+    }
+
+    // Main pointer position (last coalesced event)
+    const last = coalesced[coalesced.length - 1] || e;
+    const x = last.clientX - rect.left;
+    const y = last.clientY - rect.top;
 
     // Crosshair
     cross.style.left = x + 'px';
     cross.style.top = y + 'px';
     cross.style.opacity = '1';
 
-    // Trail dot
-    const dot = document.createElement('div');
-    dot.className = 'test-dot';
-    dot.style.left = x + 'px';
-    dot.style.top = y + 'px';
-    trail.appendChild(dot);
-    dots.push({ el: dot, t });
-    if (dots.length > MAX_DOTS) {
-      const old = dots.shift();
-      old.el.remove();
+    // Trail dots — draw one per coalesced event for visual density
+    for (const ce of coalesced) {
+      const dx = ce.clientX - rect.left;
+      const dy = ce.clientY - rect.top;
+      const dot = document.createElement('div');
+      dot.className = 'test-dot';
+      dot.style.left = dx + 'px';
+      dot.style.top = dy + 'px';
+      trail.appendChild(dot);
+      dots.push({ el: dot, t });
     }
-    // Fade older dots
+    while (dots.length > MAX_DOTS) {
+      dots.shift().el.remove();
+    }
     dots.forEach((d, i) => { d.el.style.opacity = (i / dots.length).toFixed(2); });
 
-    // Speed
+    // Speed (px/s)
     if (lastT > 0) {
       const dt = (t - lastT) / 1000;
       if (dt > 0) {
         const dist = Math.sqrt((x - lastX) ** 2 + (y - lastY) ** 2);
-        const spd = dist / dt;
-        speedSmooth = speedSmooth * 0.7 + spd * 0.3;
+        speedSmooth = speedSmooth * 0.7 + (dist / dt) * 0.3;
         $speed.textContent = Math.round(speedSmooth);
       }
     }
@@ -1019,16 +1031,15 @@ $btnClearLog.addEventListener('click', () => {
     $tx.textContent = Math.round(x);
     $ty.textContent = Math.round(y);
 
-    // Polling rate estimation
-    events.push(t);
+    // Polling rate — count coalesced events in last 1 second
     const cutoff = t - 1000;
-    events = events.filter(ts => ts > cutoff);
-    if (events.length > 2) {
-      $rate.textContent = events.length - 1;
+    timestamps = timestamps.filter(ts => ts > cutoff);
+    if (timestamps.length > 2) {
+      $rate.textContent = timestamps.length;
     }
   });
 
-  area.addEventListener('mouseleave', () => {
+  area.addEventListener('pointerleave', () => {
     cross.style.opacity = '0';
     speedSmooth = 0;
   });
