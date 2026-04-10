@@ -30,8 +30,8 @@ const POLLING_RATE_MAP_REV = {
 
 /* PIDs that use the reversed polling rate mapping */
 const REVERSED_POLLING_PIDS = new Set([
-  0x00BE, // Viper V3 HyperSpeed (Wired)
-  0x00BF, // Viper V3 HyperSpeed (Wireless)
+  0x00BE, // DeathAdder V4 Pro (Wired)
+  0x00BF, // DeathAdder V4 Pro (Wireless)
 ]);
 
 /* Viper V3 Pro (0x00C0/0x00C1) uses TX 0x1f for all commands */
