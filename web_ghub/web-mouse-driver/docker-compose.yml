@@ -1,7 +1,0 @@
-services:
-  web-mouse-driver:
-    build: .
-    container_name: web-mouse-driver
-    ports:
-      - "3000:3000"
-    restart: unless-stopped
